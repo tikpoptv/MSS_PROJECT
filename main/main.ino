@@ -80,6 +80,9 @@ const int PIR_START_hour_PM = 1;
 const int PIR_START_hour_AM = 5;
 const int PIR_START_minute = 50;
 int Automatic_PIR = 1;
+int PIR_Close = 0;
+int PIR_Button = 0;
+
 
 //Buzzer 
 
@@ -127,9 +130,6 @@ void setup() { //Start Setup
 
 void loop() { //Start loop
 
-
-  
-  
   ////////////////////////////////////////////////////////////////
   /* read sensor and start blynk*/
   get_dht();   //read humidity and temperature
@@ -137,8 +137,6 @@ void loop() { //Start loop
   Blynk.run(); //start blynk 
   ////////////////////////////////////////////////////////////////
 
-  
-  ////////////////////////////////////////////////////////////////
   /* PIR SENSOR */
   if(pir_on){
     digitalWrite(led_alert_PIR, HIGH);
@@ -181,24 +179,30 @@ void loop() { //Start loop
 
 
   //////////////////////////////////////////////////////////////////
-  if(Automatic_PIR == 1){
-    get_Automatic_PIR();
-  }
-  else {
-        if(send_notify == true){
-           LINE.notify("อัตโนมัติ \n PIR โดนบังคับปิด ");
-          send_notify = false;
-        }
-        pir_on = 0;
-        Blynk.virtualWrite(V2, 0);
-        Serial.println("ระบบอัตโนมัติโดนบังคับปิด");
+    if(PIR_Close == 1){
+
+      pir_on = 0;
+      PIR_Button = 0;
+      Blynk.virtualWrite(V2, 0);
+      Serial.println("ระบบอัตโนมัติโดนบังคับปิด");
+
+
     }
-  
- 
-  
-  
+    else {
+      get_Automatic_PIR();
+
+      if(PIR_Button == 1){
+
+        pir_on = 1;
+
+      }
+      else {
+        pir_on = 0;
+      }
+    }
+
   /* delay */ 
-  delay(delay_loop);
+//  delay(delay_loop);
 } //END LOOP
 
 //////////////////////////////////////////////////////////////////
@@ -287,7 +291,7 @@ void listFiles(void) {
 
   Serial.println(line);
   Serial.println();
-  delay(1000);
+ // delay(1000);
 }
 //////////////////////////////////////////////////////////////////
 
@@ -359,24 +363,21 @@ void get_dht(){
 //button pir
 BLYNK_WRITE(V2){
   if(param.asInt()){
-      pir_on = 1;
+      PIR_Button = 1;
       
   }
   else{
-      pir_on = 0;
+      PIR_Button = 0;
   }
 }
 //////////////////////////////////////////////////////////////////
 BLYNK_WRITE(V10){
   if(param.asInt()){
     Blynk.virtualWrite(V11, "ระบบอัตโนมัติโดนบังคับปิด");
-    Serial.println("ระบบอัตโนมัติโดนบังคับปิด");
-    Automatic_PIR = 0;
-    
-    //LINE.notify("test");
+    PIR_Close = 1;
   }
   else{
-     Automatic_PIR = 1;
+     PIR_Close = 0;
      Blynk.virtualWrite(V11, "ระบบอัตโนมัติทำงานโดยอัตโนมัติ");
      Serial.println("ระบบอัตโนมัติทำงานโดยอัตโนมัติ");
      send_notify = true;
@@ -468,7 +469,4 @@ void get_Automatic_PIR(){
        
     }
   }
-
-  //(DHT_START_hour == timeClient.getHours() && DHT_START_minute <= timeClient.getMinutes())
-
 }
