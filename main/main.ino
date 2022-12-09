@@ -38,7 +38,7 @@ int send_once = 0;
 
 
 
-String IPCAM_IP  =  "172.20.10.11:8888";
+String IPCAM_IP  =  "192.168.2.37:8888";
 bool ipCameraEnabled = true; 
 
 //blynk
@@ -58,8 +58,11 @@ int led_alert_PIR = D0;
 //send notify
 bool send_notify = true;
 
-//send notify
+//pir_on_once
 bool pir_on_once = true;
+
+//Buzzer_once
+bool Buzzer_once = true;
 
 //delay
 int delay_loop = 1000;
@@ -70,22 +73,36 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", 25200 );
 int hourNow, minuteNow, secondNow;
 
+//Week Days
+String weekDays[7]={"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"};
+ 
+//Month names
+String months[12]={"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+String currentDate;
+
 // TIME CONTROL
 // DHT //
 const int DHT_START_hour = 1;
 const int DHT_START_minute = 56;
 
 // PIR //
-const int PIR_START_hour_PM = 1;
-const int PIR_START_hour_AM = 5;
-const int PIR_START_minute = 50;
-int Automatic_PIR = 1;
+const int PIR_START_hour = 17;
+const int PIR_START_minute = 30;
+const int PIR_END_hour = 5;
+const int PIR_END_minute = 30;
+//
+const int PIR_START_hour_PM = PIR_START_hour;
+const int PIR_START_hour_AM = PIR_END_hour - 1;
+//
+int Automatic_PIR_Status = 0; 
+int Automatic_PIR = 0;
 int PIR_Close = 0;
 int PIR_Button = 0;
 
 
 //Buzzer 
 
+int Buzzer_Button = 0;
 int Buzzer_Status = 0;
 
 void setup() { //Start Setup
@@ -130,6 +147,7 @@ void setup() { //Start Setup
 
 void loop() { //Start loop
 
+
   ////////////////////////////////////////////////////////////////
   /* read sensor and start blynk*/
   get_dht();   //read humidity and temperature
@@ -144,18 +162,21 @@ void loop() { //Start loop
     LED_PIR_ONLINE.on();    
     if(pir_val == 1){ //ถ้ามีความเคลื่อนไหวใหทำอะไรใส่ในนี้
       LED_PIR.on();
-      if(Buzzer_Status == 1){
-        digitalWrite(Buzzer, HIGH);
+      if(Buzzer_Button == 1){
+        Buzzer_Status = 1;
         Blynk.virtualWrite(V11, "Get_Buzzer ทำงาน");
+        Serial.println("Buzzer_Button_Online");
       }
       else{
+        Buzzer_Status = 0;
         Blynk.virtualWrite(V11, "Buzzer Mode is Offline");
+        Serial.println("Buzzer_Button_Office");
       }
       sendLineNotify();
       
     }
     else{ //ถ้าไม่มีความเคลื่อนไหวให้ทำอะไร ถ้าไม่ต้องทำอะไรก็ไม่ต้องใส่ หรือลบ else ออกได้เลย
-      digitalWrite(Buzzer, LOW);
+      
       LED_PIR.off(); 
     }
   } 
@@ -164,6 +185,19 @@ void loop() { //Start loop
     LED_PIR_OFFLINE.on();
     LED_PIR_ONLINE.off();
   }
+
+
+  ////////////////////////////////////////////////////////////////
+
+  if (Buzzer_Status == 1) {
+      get_Buzzer_Fc1();
+  } 
+  else if(Buzzer_Status == 2) {
+      Buzzer_once = true;
+      get_Buzzer_Fc2();
+  }
+  
+
   ////////////////////////////////////////////////////////////////
 
 
@@ -179,28 +213,60 @@ void loop() { //Start loop
 
 
   //////////////////////////////////////////////////////////////////
-    if(PIR_Close == 1){
+    if (Automatic_PIR_Status == 1) {
+      Serial.println("Automatic_PIR_Status = 1");   
+      Automatic_PIR = 1;    
+    }
+    else {
+        Automatic_PIR = 0; 
+    }      
 
+
+    if(PIR_Close == 1){
       pir_on = 0;
       PIR_Button = 0;
       Blynk.virtualWrite(V2, 0);
       Serial.println("ระบบอัตโนมัติโดนบังคับปิด");
-
-
     }
     else {
       get_Automatic_PIR();
-
       if(PIR_Button == 1){
-
         pir_on = 1;
-
       }
       else {
         pir_on = 0;
       }
+      if(Automatic_PIR == 1){    
+        pir_on = 1;
+        Blynk.virtualWrite(V2, 0);
+        Serial.println("ระบบอัตโนมัติกำลังทำงานตามเวลาที่กำหนด");
+        pir_on_once = true;
+      } 
+      else {
+        if(pir_on_once == true){
+          pir_on = 0;
+          pir_on_once = false;
+        }
+      }
     }
 
+    ////
+//Get a time structure
+
+    /////
+ unsigned long epochTime = timeClient.getEpochTime();
+  Serial.print("Epoch Time: ");
+  Serial.println(epochTime);
+   
+  struct tm *ptm = gmtime ((time_t *)&epochTime); 
+ 
+  int monthDay = ptm->tm_mday;
+  int currentMonth = ptm->tm_mon+1;
+  String currentMonthName = months[currentMonth-1];
+  int currentYear = ptm->tm_year+1900;
+  String currentDate = String(currentYear) + "-" + String(currentMonth) + "-" + String(monthDay);
+  Serial.print("Current date: ");
+  Serial.println(currentDate);
   /* delay */ 
 //  delay(delay_loop);
 } //END LOOP
@@ -291,7 +357,7 @@ void listFiles(void) {
 
   Serial.println(line);
   Serial.println();
- // delay(1000);
+  //delay(1000);
 }
 //////////////////////////////////////////////////////////////////
 
@@ -315,11 +381,17 @@ void chk_camera(){
 }
 //func send image
 void sendLineNotify(){
+      
+     downloadAndSaveFile("/snapshot.jpg","http://"+ IPCAM_IP +"/out.jpg");
+     LINE.notifyPicture("\n [อัตโนมัติ] \n ตรวจพบการเคลื่อนไหว \n \n ห้องหมายเลข : 18054 \n วันที่ : "+String(currentDate)+" \n เวลา : "+String(timeClient.getFormattedTime())+" ", SPIFFS, "/snapshot.jpg");  
+     Serial.println("Send message");
+
+  /*
   if(ipCameraEnabled){
      downloadAndSaveFile("/snapshot.jpg","http://"+ IPCAM_IP +"/out.jpg");
+     LINE.notifyPicture("\n [อัตโนมัติ] \n ตรวจพบการเคลื่อนไหว \n \n ห้องหมายเลข : 18054  \n เวลา : "+String(timeClient.getFormattedTime())+" ", SPIFFS, "/snapshot.jpg");  
      Serial.println("Send message");
-      LINE.notifyPicture("\n [อัตโนมัติ] \n ตรวจพบการเคลื่อนไหว \n \n ห้องหมายเลข : 18054  \n เวลา : "+String(timeClient.getFormattedTime())+" ", SPIFFS, "/snapshot.jpg");  
-  }
+  } */
 }
 //////////////////////////////////////////////////////////////////
 
@@ -398,7 +470,26 @@ BLYNK_WRITE(V9){
 
 BLYNK_WRITE(V12){
   if(param.asInt()){
+    Buzzer_Button = 1;
+  }
+  else{
+    Buzzer_Button = 0;
+    Buzzer_Status = 0;
+  }
+}
+
+BLYNK_WRITE(V13){
+  if(param.asInt()){
     Buzzer_Status = 1;
+  }
+  else{
+    Buzzer_Status = 0;
+  }
+}
+
+BLYNK_WRITE(V14){
+  if(param.asInt()){
+    Buzzer_Status = 2;
   }
   else{
     Buzzer_Status = 0;
@@ -422,6 +513,34 @@ void get_pir(){
 }
 //////////////////////////////////////////////////////////////////
 
+void get_Buzzer_Fc1(){
+
+  digitalWrite(Buzzer, HIGH);
+  delay(1000);
+  digitalWrite(Buzzer, LOW);  
+  delay(100);
+  
+}
+
+void get_Buzzer_Fc2(){
+
+   if(Buzzer_once == true){
+      digitalWrite(Buzzer, HIGH);
+      delay(100);
+      digitalWrite(Buzzer, LOW);  
+      delay(100);
+      digitalWrite(Buzzer, HIGH);
+      delay(100);
+      digitalWrite(Buzzer, LOW);      
+      Buzzer_once = false;
+      Buzzer_Status = 0;
+      Blynk.virtualWrite(V14, 0);
+   }
+
+}
+
+//////////////////////////////////////////////////////////////////
+
 void get_DHT_LineNotify(){
   if(temp < 30){ //ถ้าอุณหภูมิมากกว่า 26 ให้ทำอะไร
     send_notify = true;
@@ -439,34 +558,21 @@ void get_DHT_LineNotify(){
 void get_Automatic_PIR(){
   Serial.println("get_Automatic_PIR_ONLINE");
   if(timeClient.isTimeSet()) {
-    if (PIR_START_hour_PM <= timeClient.getHours() && PIR_START_minute == timeClient.getMinutes()) {
-        if(send_notify == true){
-          LINE.notify("อัตโนมัติ \n PIR กำลังทำงานโดยระบบอัตโนมัติ ");
-          send_notify = false;
+    if (PIR_START_hour == timeClient.getHours() && PIR_START_minute == timeClient.getMinutes()) {
+           
+                   
+  
+    } else if (PIR_START_hour_PM <= timeClient.getHours() || PIR_START_hour_AM >= timeClient.getHours())  {
+            Automatic_PIR_Status = 1;            
+            pir_on_once = true;   
+            Serial.println("เริ่มทำงานอัตโนมัติ");    
         }
-        Blynk.virtualWrite(V2, 0);
-        pir_on = 1;
-        pir_on_once = true;
+    if (PIR_END_hour == timeClient.getHours() && PIR_END_minute == timeClient.getMinutes()) {
 
-    } 
-    else if(PIR_START_hour_AM >= timeClient.getHours() && PIR_START_minute == timeClient.getMinutes()) {
+        Serial.println("หยุดการทำงานอัตโนมัติ");      
+        LINE.notify("หยุดการทำงานอัตโนมัติ");                    
+        Automatic_PIR_Status = 0; 
 
-        if(send_notify == true){
-          LINE.notify("อัตโนมัติ \n PIR กำลังทำงานโดยระบบอัตโนมัติ ");
-          send_notify = false;
-        }
-        Blynk.virtualWrite(V11, "ระบบอัตโนมัติ 00:01 - 05:30 ทำงาน");
-        Blynk.virtualWrite(V2, 0);
-        pir_on = 1;
-        pir_on_once = true;
-
-    }
-    else {
-        if(pir_on_once == true){
-          pir_on = 0;
-          pir_on_once = false;
-        }
-       
     }
   }
 }
