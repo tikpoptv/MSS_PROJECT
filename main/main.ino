@@ -7,6 +7,17 @@
 #include <NTPClient.h>
 #include <WiFiUdp.h>
 
+//rfid
+#include <SPI.h>
+#include <MFRC522.h>
+
+constexpr uint8_t RST_PIN = D3;     // Configurable, see typical pin layout above
+constexpr uint8_t SS_PIN = D4;     // Configurable, see typical pin layout above
+
+MFRC522 rfid(SS_PIN, RST_PIN); // Instance of the class
+MFRC522::MIFARE_Key key;
+String tag;
+
 //sensor DHT
 #include <DHT.h>               
 #define DHTPIN  D2              
@@ -141,6 +152,11 @@ void setup() { //Start Setup
   timeClient.begin();
   timeClient.update();
 
+  ///// rfid
+  SPI.begin(); // Init SPI bus
+  rfid.PCD_Init(); // Init MFRC522
+  
+
   //Blynk
   Blynk.virtualWrite(V10, 0);
 } //END Setup
@@ -267,6 +283,43 @@ void loop() { //Start loop
   String currentDate = String(currentYear) + "-" + String(currentMonth) + "-" + String(monthDay);
   Serial.print("Current date: ");
   Serial.println(currentDate);
+
+
+
+
+  ///////  MFRC    ////////////
+  if ( ! rfid.PICC_IsNewCardPresent())
+    return;
+  if (rfid.PICC_ReadCardSerial()) {
+    for (byte i = 0; i < 4; i++) {
+      tag += rfid.uid.uidByte[i];
+    }
+    Serial.println(tag);
+    if (tag == "799122141") {
+      Serial.println("Access Granted!");
+      digitalWrite(D0, HIGH);
+      delay(100);
+      digitalWrite(D0, LOW);
+      delay(100);
+      digitalWrite(D0, HIGH);
+      delay(100);
+      digitalWrite(D0, LOW);
+      delay(100);
+      digitalWrite(D0, HIGH);
+      delay(100);
+      digitalWrite(D0, LOW);
+      delay(100);
+    } else {
+      Serial.println("Access Denied!");
+      digitalWrite(D0, HIGH);
+      delay(2000);
+      digitalWrite(D0, LOW);
+    }
+    tag = "";
+    rfid.PICC_HaltA();
+    rfid.PCD_StopCrypto1();
+  }
+  ///////////////////////
   /* delay */ 
 //  delay(delay_loop);
 } //END LOOP
