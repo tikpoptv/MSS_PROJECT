@@ -297,6 +297,7 @@ void loop() { //Start loop
     Serial.println(tag);
     if (tag == "799122141") {
       Serial.println("Access Granted!");
+      Buzzer_Status = 2;
       digitalWrite(D0, HIGH);
       delay(100);
       digitalWrite(D0, LOW);
@@ -622,8 +623,7 @@ void get_Automatic_PIR(){
         }
     if (PIR_END_hour == timeClient.getHours() && PIR_END_minute == timeClient.getMinutes()) {
 
-        Serial.println("หยุดการทำงานอัตโนมัติ");      
-        LINE.notify("หยุดการทำงานอัตโนมัติ");                    
+        Serial.println("หยุดการทำงานอัตโนมัติ");                    
         Automatic_PIR_Status = 0; 
 
     }
