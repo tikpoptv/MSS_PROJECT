@@ -623,7 +623,7 @@ void get_Automatic_PIR(){
         }
     if (PIR_END_hour == timeClient.getHours() && PIR_END_minute == timeClient.getMinutes()) {
 
-        Serial.println("หยุดการทำงานอัตโนมัติ");                    
+        Serial.println("หยุดการทำงานอัตโนมัติ...");                    
         Automatic_PIR_Status = 0; 
 
     }
